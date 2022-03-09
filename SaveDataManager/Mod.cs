@@ -4,6 +4,11 @@ namespace SaveDataManager
 {
     public class Mod : PulsarMod
     {
+        public Mod()
+        {
+            new SaveDataManager();
+        }
+
         public override string Version =>"0.0.1";
 
         public override string Author => "Dragon";

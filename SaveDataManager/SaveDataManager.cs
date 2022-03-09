@@ -31,7 +31,7 @@ namespace SaveDataManager
         {
             mod.GetType().Assembly.GetTypes().AsParallel().ForAll((type) =>
             {
-                if ( typeof(PMLSaveData).IsAssignableFrom(type) )
+                if ( typeof(PMLSaveData).IsAssignableFrom(type) && !type.IsAbstract)
                 {
                     PMLSaveData SaveData = (PMLSaveData)Activator.CreateInstance(type);
                     SaveData.MyMod = mod;
@@ -73,11 +73,15 @@ namespace SaveDataManager
             binaryWriter.Write(SaveConfigs.Count);
             foreach(PMLSaveData saveData in SaveConfigs)
             {
+                PulsarModLoader.Utilities.Logger.Info($"Writing: {saveData.MyMod.HarmonyIdentifier()}::{saveData.Identifier()}");
                 MemoryStream dataStream = saveData.SaveData();          //Collect Save data from mod
                 binaryWriter.Write(saveData.MyMod.HarmonyIdentifier()); //Write Mod Identifier
                 binaryWriter.Write(saveData.Identifier());              //Write PMLSaveData Identifier
-                binaryWriter.Write((int)dataStream.Length);             //Write Stream Byte count
+                binaryWriter.Write((int)dataStream.Length);             //Write stream byte count
+                dataStream.Position = 0;                                //Reset position of dataStream for reading
                 dataStream.CopyTo(binaryWriter.BaseStream);             //Copy save data to file
+                binaryWriter.BaseStream.Position += dataStream.Length;  //Set position of file writer
+                dataStream.Close();
             }
 
             //Finish Saving, close and save file to actual location
@@ -87,7 +91,7 @@ namespace SaveDataManager
             {
                 File.Delete(fileName);
             }
-            File.Move(tempText, inFileName);
+            File.Move(tempText, fileName);
             string relativeFileName = PLNetworkManager.Instance.FileNameToRelative(fileName);
             Logger.Info("PMLSaveManager has saved file: " + relativeFileName);
         }
@@ -95,28 +99,37 @@ namespace SaveDataManager
         public void LoadDatas(string inFileName)
         {
             //start reading
+            PulsarModLoader.Utilities.Logger.Info("Reading file");
             string fileName = getPMLSaveFileName(inFileName);
             FileStream fileStream = File.OpenRead(fileName);
             BinaryReader binaryReader = new BinaryReader(fileStream);
 
             //read for mods
+
             int count = binaryReader.ReadInt32();
             for (int i = 0; i < count; i++)
             {
                 string harmonyIdent = binaryReader.ReadString(); //HarmonyIdentifier
                 string SavDatIdent = binaryReader.ReadString();  //SaveDataIdentifier
-                int bytecount = binaryReader.ReadInt32();       //ByteCount
+                int bytecount = binaryReader.ReadInt32();        //ByteCount
                 foreach(PMLSaveData savedata in SaveConfigs)
                 {
                     if(savedata.MyMod.HarmonyIdentifier() == harmonyIdent && savedata.Identifier() == SavDatIdent)
                     {
+                        PulsarModLoader.Utilities.Logger.Info($"Reading SaveData: {harmonyIdent}::{SavDatIdent} with bytecount: {bytecount}");
                         MemoryStream stream = new MemoryStream();               //initialize new memStream
-                        binaryReader.BaseStream.CopyTo(stream, bytecount);      //Copy file data to memStream
+                        for (i = 0; i < bytecount; i++)                         //Copy file data to memStream
+                        {
+                            stream.WriteByte((byte)binaryReader.BaseStream.ReadByte());
+                        }
+                        stream.Position = 0;                                    //Reset position
                         savedata.LoadData(stream);                              //Send memStream to PMLSaveData
+                        stream.Close();
                     }
                 }
             }
 
+            PulsarModLoader.Utilities.Logger.Info("Finished reading file");
             //Finish Reading
             binaryReader.Close();
             fileStream.Close();
