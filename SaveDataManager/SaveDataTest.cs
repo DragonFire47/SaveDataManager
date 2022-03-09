@@ -10,11 +10,12 @@ namespace SaveDataManager
             return "Test";
         }
 
-        public override void LoadData(MemoryStream filestream)
+        public override void LoadData(MemoryStream dataStream)
         {
-            using (BinaryReader reader = new BinaryReader(filestream))
+            using (BinaryReader reader = new BinaryReader(dataStream))
             {
                 string value = reader.ReadString();
+                PulsarModLoader.Utilities.Logger.Info("read: " + value);
             }
         }
 

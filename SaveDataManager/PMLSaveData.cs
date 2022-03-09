@@ -8,6 +8,6 @@ namespace SaveDataManager
         public PulsarMod MyMod;
         public abstract string Identifier();
         public abstract MemoryStream SaveData();
-        public abstract void LoadData(MemoryStream filestream);
+        public abstract void LoadData(MemoryStream dataStream);
     }
 }
