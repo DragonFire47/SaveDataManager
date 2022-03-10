@@ -109,12 +109,14 @@ namespace SaveDataManager
 
             //read for mods
             int count = binaryReader.ReadInt32();                //int32 representing total configs
+            string missingMods = "";
             for (int i = 0; i < count; i++)
             {
                 string harmonyIdent = binaryReader.ReadString(); //HarmonyIdentifier
                 string SavDatIdent = binaryReader.ReadString();  //SaveDataIdentifier
                 int bytecount = binaryReader.ReadInt32();        //ByteCount
                 PulsarModLoader.Utilities.Logger.Info($"Reading SaveData: {harmonyIdent}::{SavDatIdent} with bytecount: {bytecount} Pos: {binaryReader.BaseStream.Position}");
+                bool foundReader = false;
                 foreach (PMLSaveData savedata in SaveConfigs)
                 {
                     if(savedata.MyMod.HarmonyIdentifier() == harmonyIdent && savedata.Identifier() == SavDatIdent)
@@ -128,7 +130,12 @@ namespace SaveDataManager
                         stream.Position = 0;                                    //Reset position
                         savedata.LoadData(stream);                              //Send memStream to PMLSaveData
                         stream.Close();
+                        foundReader = true;
                     }
+                }
+                if(!foundReader)
+                {
+                    missingMods+= ("\n" + harmonyIdent);
                 }
             }
 
@@ -136,6 +143,11 @@ namespace SaveDataManager
             binaryReader.Close();
             fileStream.Close();
             Logger.Info("PMLSaveManager has read file: " + PLNetworkManager.Instance.FileNameToRelative(fileName));
+
+            if(missingMods.Length > 0)
+            {
+                PLNetworkManager.Instance.MainMenu.AddActiveMenu(new PLErrorMessageMenu($"Warning: Found save data for following missing mods: {missingMods}"));
+            }
         }
     }
     [HarmonyPatch(typeof(PLSaveGameIO), "SaveToFile")]
