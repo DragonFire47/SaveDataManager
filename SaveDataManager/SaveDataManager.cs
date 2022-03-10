@@ -135,6 +135,7 @@ namespace SaveDataManager
                 }
                 if(!foundReader)
                 {
+                    binaryReader.BaseStream.Position += bytecount;
                     missingMods+= ("\n" + harmonyIdent);
                 }
             }
@@ -147,6 +148,7 @@ namespace SaveDataManager
             if(missingMods.Length > 0)
             {
                 PLNetworkManager.Instance.MainMenu.AddActiveMenu(new PLErrorMessageMenu($"Warning: Found save data for following missing mods: {missingMods}"));
+                Logger.Info($"Warning: Found save data for following missing mods: {missingMods}");
             }
         }
     }
