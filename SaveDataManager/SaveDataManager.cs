@@ -73,19 +73,26 @@ namespace SaveDataManager
             binaryWriter.Write(SaveConfigs.Count);                      //int32 representing total configs
             foreach(PMLSaveData saveData in SaveConfigs)
             {
-                PulsarModLoader.Utilities.Logger.Info($"Writing: {saveData.MyMod.HarmonyIdentifier()}::{saveData.Identifier()}");
-                MemoryStream dataStream = saveData.SaveData();          //Collect Save data from mod
-                int bytecount = (int)dataStream.Length;
-                binaryWriter.Write(saveData.MyMod.HarmonyIdentifier()); //Write Mod Identifier
-                binaryWriter.Write(saveData.Identifier());              //Write PMLSaveData Identifier
-                binaryWriter.Write(bytecount);                          //Write stream byte count
-                dataStream.Position = 0;                                //Reset position of dataStream for reading
+                try
+                {
+                    PulsarModLoader.Utilities.Logger.Info($"Writing: {saveData.MyMod.HarmonyIdentifier()}::{saveData.Identifier()}");
+                    MemoryStream dataStream = saveData.SaveData();          //Collect Save data from mod
+                    int bytecount = (int)dataStream.Length;
+                    binaryWriter.Write(saveData.MyMod.HarmonyIdentifier()); //Write Mod Identifier
+                    binaryWriter.Write(saveData.Identifier());              //Write PMLSaveData Identifier
+                    binaryWriter.Write(bytecount);                          //Write stream byte count
+                    dataStream.Position = 0;                                //Reset position of dataStream for reading
 
-                byte[] buffer = new byte[bytecount];                    
-                dataStream.Read(buffer, 0, bytecount);                  //move data to filestream
-                binaryWriter.BaseStream.Write(buffer, 0, bytecount);
+                    byte[] buffer = new byte[bytecount];
+                    dataStream.Read(buffer, 0, bytecount);                  //move data to filestream
+                    binaryWriter.BaseStream.Write(buffer, 0, bytecount);
 
-                dataStream.Close();
+                    dataStream.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Info($"Failed to save a mod data.\n{ex.Message}");
+                }
             }
 
             //Finish Saving, close and save file to actual location
@@ -128,7 +135,14 @@ namespace SaveDataManager
                         stream.Write(buffer, 0, bytecount);                     
 
                         stream.Position = 0;                                    //Reset position
-                        savedata.LoadData(stream);                              //Send memStream to PMLSaveData
+                        try
+                        {
+                            savedata.LoadData(stream);                          //Send memStream to PMLSaveData
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Info($"Failed to load {harmonyIdent}::{SavDatIdent}\n{ex.Message}");
+                        }
                         stream.Close();
                         foundReader = true;
                     }
