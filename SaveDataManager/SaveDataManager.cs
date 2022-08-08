@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using PulsarModLoader;
 using PulsarModLoader.Utilities;
+using Steamworks;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -105,6 +106,21 @@ namespace SaveDataManager
             File.Move(tempText, fileName);
             string relativeFileName = PLNetworkManager.Instance.FileNameToRelative(fileName);
             Logger.Info("PMLSaveManager has saved file: " + relativeFileName);
+
+
+            //Save to Steam
+            bool flag = false;
+            if (relativeFileName.StartsWith(LocalSaveDir))
+            {
+                flag = true;
+            }
+            if (!PLServer.Instance.IronmanModeIsActive && !flag)
+            {
+                PLNetworkManager.Instance.SteamCloud_WriteFileName(relativeFileName, delegate (RemoteStorageFileWriteAsyncComplete_t pCallback, bool bIOFailure)
+                {
+                    PLSaveGameIO.Instance.OnRemoteFileWriteAsyncComplete(pCallback, bIOFailure, relativeFileName);
+                });
+            }
         }
 
         public void LoadDatas(string inFileName)
@@ -198,6 +214,30 @@ namespace SaveDataManager
                 catch (Exception ex)
                 {
                     Logger.Info("DeleteSaveGame EXCEPTION: " + ex.Message + ": Could not delete save file!");
+                }
+            }
+        }
+    }
+    [HarmonyPatch(typeof(PLNetworkManager), "SteamCloud_ReadFileName")]
+    class SteamDLPatch
+    {
+        static void Postfix(string inFileName)
+        {
+            if (inFileName.EndsWith(".plsave"))
+            {
+                string PMLname = inFileName.Replace(".plsave", ".pmlsave");
+
+                if (SteamRemoteStorage.FilePersisted(PMLname) && !File.Exists(PMLname))
+                {
+                    if (PLNetworkManager.Instance.SteamCloud_ReadFileName(PMLname, 
+                        delegate (RemoteStorageFileReadAsyncComplete_t pCallback, bool bIOFailure)
+                        {
+                            PLSaveGameIO.Instance.OnRemoteFileReadAsyncComplete(pCallback, bIOFailure, PMLname);
+                        })
+                       )
+                    {
+                        return;
+                    }
                 }
             }
         }
