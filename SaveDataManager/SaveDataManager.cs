@@ -1,7 +1,6 @@
 ﻿using HarmonyLib;
 using PulsarModLoader;
 using PulsarModLoader.Utilities;
-using Steamworks;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,7 +12,7 @@ namespace SaveDataManager
     {
         public SaveDataManager()
         {
-            foreach(PulsarMod mod in ModManager.Instance.GetAllMods())
+            foreach (PulsarMod mod in ModManager.Instance.GetAllMods())
             {
                 OnModLoaded(mod.Name, mod);
             }
@@ -32,11 +31,11 @@ namespace SaveDataManager
         {
             mod.GetType().Assembly.GetTypes().AsParallel().ForAll((type) =>
             {
-                if ( typeof(PMLSaveData).IsAssignableFrom(type) && !type.IsAbstract)
+                if (typeof(PMLSaveData).IsAssignableFrom(type) && !type.IsAbstract)
                 {
                     PMLSaveData SaveData = (PMLSaveData)Activator.CreateInstance(type);
                     SaveData.MyMod = mod;
-                    SaveConfigs.Add( SaveData );
+                    SaveConfigs.Add(SaveData);
                 }
             });
         }
@@ -44,7 +43,7 @@ namespace SaveDataManager
         void OnModRemoved(PulsarMod mod)
         {
             List<PMLSaveData> saveConfigsToRemove = new List<PMLSaveData>();
-            SaveConfigs.AsParallel().ForAll((arg) => 
+            SaveConfigs.AsParallel().ForAll((arg) =>
             {
                 if (arg.GetType().Assembly == mod.GetType().Assembly)
                 {
@@ -59,11 +58,21 @@ namespace SaveDataManager
 
         public static string getPMLSaveFileName(string inFileName)
         {
+            if(inFileName.EndsWith("LastRecoveredSave.plsave")) //Fix LastRecoveredSave
+            {
+                return inFileName.Replace("LastRecoveredSave.plsave", "LastRecoveredMSave.pmlsave");
+            }
             return inFileName.Replace(".plsave", ".pmlsave");
         }
 
         public void SaveDatas(string inFileName)
         {
+            //Stop if no save configs to save
+            if(SaveConfigs.Count == 0)
+            {
+                return;
+            }
+
             //Start Saving, create temp file
             string fileName = getPMLSaveFileName(inFileName);
             string tempText = fileName + "_temp";
@@ -72,7 +81,7 @@ namespace SaveDataManager
 
             //save for mods
             binaryWriter.Write(SaveConfigs.Count);                      //int32 representing total configs
-            foreach(PMLSaveData saveData in SaveConfigs)
+            foreach (PMLSaveData saveData in SaveConfigs)
             {
                 try
                 {
@@ -109,24 +118,29 @@ namespace SaveDataManager
 
 
             //Save to Steam
-            bool flag = false;
+            /*bool localFile = false;
             if (relativeFileName.StartsWith(LocalSaveDir))
             {
-                flag = true;
+                localFile = true;
             }
-            if (!PLServer.Instance.IronmanModeIsActive && !flag)
+            if (!PLServer.Instance.IronmanModeIsActive && !localFile)
             {
+                Logger.Info("Should be saving file to steam cloud");
                 PLNetworkManager.Instance.SteamCloud_WriteFileName(relativeFileName, delegate (RemoteStorageFileWriteAsyncComplete_t pCallback, bool bIOFailure)
                 {
-                    PLSaveGameIO.Instance.OnRemoteFileWriteAsyncComplete(pCallback, bIOFailure, relativeFileName);
+                    OnRemoteFileWriteAsyncComplete(pCallback, bIOFailure, relativeFileName);
                 });
-            }
+            }*/
         }
 
         public void LoadDatas(string inFileName)
         {
             //start reading
             string fileName = getPMLSaveFileName(inFileName);
+            if(!File.Exists(fileName))
+            {
+                return;
+            }
             FileStream fileStream = File.OpenRead(fileName);
             BinaryReader binaryReader = new BinaryReader(fileStream);
 
@@ -142,13 +156,13 @@ namespace SaveDataManager
                 bool foundReader = false;
                 foreach (PMLSaveData savedata in SaveConfigs)
                 {
-                    if(savedata.MyMod.HarmonyIdentifier() == harmonyIdent && savedata.Identifier() == SavDatIdent)
+                    if (savedata.MyMod.HarmonyIdentifier() == harmonyIdent && savedata.Identifier() == SavDatIdent)
                     {
                         MemoryStream stream = new MemoryStream();               //initialize new memStream
 
-                        byte[] buffer = new byte[bytecount];                    
+                        byte[] buffer = new byte[bytecount];
                         binaryReader.BaseStream.Read(buffer, 0, bytecount);     //move data to memStream
-                        stream.Write(buffer, 0, bytecount);                     
+                        stream.Write(buffer, 0, bytecount);
 
                         stream.Position = 0;                                    //Reset position
                         try
@@ -163,10 +177,10 @@ namespace SaveDataManager
                         foundReader = true;
                     }
                 }
-                if(!foundReader)
+                if (!foundReader)
                 {
                     binaryReader.BaseStream.Position += bytecount;
-                    missingMods+= ("\n" + harmonyIdent);
+                    missingMods += ("\n" + harmonyIdent);
                 }
             }
 
@@ -175,7 +189,7 @@ namespace SaveDataManager
             fileStream.Close();
             Logger.Info("PMLSaveManager has read file: " + PLNetworkManager.Instance.FileNameToRelative(fileName));
 
-            if(missingMods.Length > 0)
+            if (missingMods.Length > 0)
             {
                 PLNetworkManager.Instance.MainMenu.AddActiveMenu(new PLErrorMessageMenu($"Warning: Found save data for following missing mods: {missingMods}"));
                 Logger.Info($"Warning: Found save data for following missing mods: {missingMods}");
@@ -198,10 +212,12 @@ namespace SaveDataManager
             SaveDataManager.Instance.LoadDatas(inFileName);
         }
     }
+
+
     [HarmonyPatch(typeof(PLSaveGameIO), "DeleteSaveGame")]
     class DeletePatch
     {
-        static void Prefix(PLSaveGameIO __instance)
+        static void Postfix(PLSaveGameIO __instance)
         {
             string fileName = SaveDataManager.getPMLSaveFileName(__instance.LatestSaveGameFileName);
             if (fileName != "")
@@ -218,27 +234,16 @@ namespace SaveDataManager
             }
         }
     }
-    [HarmonyPatch(typeof(PLNetworkManager), "SteamCloud_ReadFileName")]
-    class SteamDLPatch
+
+    [HarmonyPatch(typeof(PLUILoadMenu), "OnClickDeleteSaveFile")]
+    class LoadMenuDeletePatch
     {
         static void Postfix(string inFileName)
         {
             if (inFileName.EndsWith(".plsave"))
             {
-                string PMLname = inFileName.Replace(".plsave", ".pmlsave");
-
-                if (SteamRemoteStorage.FilePersisted(PMLname) && !File.Exists(PMLname))
-                {
-                    if (PLNetworkManager.Instance.SteamCloud_ReadFileName(PMLname, 
-                        delegate (RemoteStorageFileReadAsyncComplete_t pCallback, bool bIOFailure)
-                        {
-                            PLSaveGameIO.Instance.OnRemoteFileReadAsyncComplete(pCallback, bIOFailure, PMLname);
-                        })
-                       )
-                    {
-                        return;
-                    }
-                }
+                string PMLname = SaveDataManager.getPMLSaveFileName(inFileName);
+                typeof(PLUILoadMenu).GetMethod("OnClickDeleteSaveFile", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(PLUILoadMenu.Instance, new object[] { PMLname });
             }
         }
     }
