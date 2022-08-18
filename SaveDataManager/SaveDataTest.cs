@@ -10,7 +10,9 @@ namespace SaveDataManager
             return "Test";
         }
 
-        public override void LoadData(MemoryStream dataStream)
+        public override uint VersionID => 0; //Optional, defaults to 0. Can be read and set to higher values.
+
+        public override void LoadData(MemoryStream dataStream, uint VersionID)
         {
             using (BinaryReader reader = new BinaryReader(dataStream))
             {
