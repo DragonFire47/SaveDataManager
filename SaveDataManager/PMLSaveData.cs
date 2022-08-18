@@ -7,7 +7,8 @@ namespace SaveDataManager
     {
         public PulsarMod MyMod;
         public abstract string Identifier();
+        public virtual uint VersionID => 0;
         public abstract MemoryStream SaveData();
-        public abstract void LoadData(MemoryStream dataStream);
+        public abstract void LoadData(MemoryStream dataStream, uint VersionID);
     }
 }

@@ -92,8 +92,11 @@ namespace SaveDataManager
                     PulsarModLoader.Utilities.Logger.Info($"Writing: {saveData.MyMod.HarmonyIdentifier()}::{saveData.Identifier()}");
                     MemoryStream dataStream = saveData.SaveData();          //Collect Save data from mod
                     int bytecount = (int)dataStream.Length;
+
+                                                                            //SaveDataHeader
                     binaryWriter.Write(saveData.MyMod.HarmonyIdentifier()); //Write Mod Identifier
                     binaryWriter.Write(saveData.Identifier());              //Write PMLSaveData Identifier
+                    binaryWriter.Write(saveData.VersionID);                 //Write PMLSaveData VersionID
                     binaryWriter.Write(bytecount);                          //Write stream byte count
                     dataStream.Position = 0;                                //Reset position of dataStream for reading
 
@@ -151,17 +154,27 @@ namespace SaveDataManager
             //read for mods
             int count = binaryReader.ReadInt32();                //int32 representing total configs
             string missingMods = "";
+            string VersionMismatchedMods = "";
             for (int i = 0; i < count; i++)
             {
+                //SaveDataHeader
                 string harmonyIdent = binaryReader.ReadString(); //HarmonyIdentifier
                 string SavDatIdent = binaryReader.ReadString();  //SaveDataIdentifier
+                uint VersionID = binaryReader.ReadUInt32();      //VersionID
                 int bytecount = binaryReader.ReadInt32();        //ByteCount
-                PulsarModLoader.Utilities.Logger.Info($"Reading SaveData: {harmonyIdent}::{SavDatIdent} with bytecount: {bytecount} Pos: {binaryReader.BaseStream.Position}");
+                PulsarModLoader.Utilities.Logger.Info($"Reading SaveData: {harmonyIdent}::{SavDatIdent} SaveDataVersion: {VersionID} bytecount: {bytecount} Pos: {binaryReader.BaseStream.Position}");
+
+
                 bool foundReader = false;
                 foreach (PMLSaveData savedata in SaveConfigs)
                 {
                     if (savedata.MyMod.HarmonyIdentifier() == harmonyIdent && savedata.Identifier() == SavDatIdent)
                     {
+                        if(VersionID != savedata.VersionID)
+                        {
+                            Logger.Info($"Mismatched SaveData VersionID. Read: {VersionID} SaveData: {savedata.VersionID}");
+                            VersionMismatchedMods += "\n" + harmonyIdent;
+                        }
                         MemoryStream stream = new MemoryStream();               //initialize new memStream
 
                         byte[] buffer = new byte[bytecount];
@@ -171,7 +184,7 @@ namespace SaveDataManager
                         stream.Position = 0;                                    //Reset position
                         try
                         {
-                            savedata.LoadData(stream);                          //Send memStream to PMLSaveData
+                            savedata.LoadData(stream, VersionID);               //Send memStream to PMLSaveData
                         }
                         catch (Exception ex)
                         {
@@ -197,6 +210,11 @@ namespace SaveDataManager
             {
                 PLNetworkManager.Instance.MainMenu.AddActiveMenu(new PLErrorMessageMenu($"Warning: Found save data for following missing mods: {missingMods}"));
                 Logger.Info($"Warning: Found save data for following missing mods: {missingMods}");
+            }
+            if (!string.IsNullOrEmpty(VersionMismatchedMods))
+            {
+                PLNetworkManager.Instance.MainMenu.AddActiveMenu(new PLErrorMessageMenu($"Warning: The following mods used in this save have been updated: {VersionMismatchedMods}"));
+                Logger.Info($"Warning: The following mods used in this save have been updated: {VersionMismatchedMods}");
             }
         }
     }
