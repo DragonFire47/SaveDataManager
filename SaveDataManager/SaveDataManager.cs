@@ -67,14 +67,18 @@ namespace SaveDataManager
 
         public void SaveDatas(string inFileName)
         {
-            //Stop if no save configs to save
-            if(SaveConfigs.Count == 0)
+            //Stop if no save configs to save. Additionally check for older .pmlsave file under the same name and delete.
+            string fileName = getPMLSaveFileName(inFileName);
+            if (SaveConfigs.Count == 0)
             {
+                if(File.Exists(fileName))
+                {
+                    File.Delete(fileName);
+                }
                 return;
             }
 
             //Start Saving, create temp file
-            string fileName = getPMLSaveFileName(inFileName);
             string tempText = fileName + "_temp";
             FileStream fileStream = File.Create(tempText);
             BinaryWriter binaryWriter = new BinaryWriter(fileStream);
