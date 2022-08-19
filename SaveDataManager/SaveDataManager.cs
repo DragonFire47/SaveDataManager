@@ -73,6 +73,7 @@ namespace SaveDataManager
             {
                 if(File.Exists(fileName))
                 {
+                    Logger.Info("Old PMLSave found with no new data to save. Deleting old data.");
                     File.Delete(fileName);
                 }
                 return;
